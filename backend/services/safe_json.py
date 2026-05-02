@@ -59,9 +59,13 @@ def coerce_extraction(data: dict[str, Any]) -> dict[str, Any]:
 
 def coerce_recommendations(data: dict[str, Any]) -> dict[str, Any]:
     return {
+        "clinical_impression": [str(v) for v in _list(data.get("clinical_impression"))],
         "possible_conditions": [str(v) for v in _list(data.get("possible_conditions"))],
         "recommended_tests": [str(v) for v in _list(data.get("recommended_tests"))],
         "medications": [str(v) for v in _list(data.get("medications"))],
+        "medication_cautions": [str(v) for v in _list(data.get("medication_cautions"))],
+        "red_flags": [str(v) for v in _list(data.get("red_flags"))],
+        "missing_information": [str(v) for v in _list(data.get("missing_information"))],
         "follow_ups": [str(v) for v in _list(data.get("follow_ups"))],
         "safety_notes": [str(v) for v in _list(data.get("safety_notes"))]
         or ["AI recommendations require clinician review."],

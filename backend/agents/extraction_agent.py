@@ -30,11 +30,15 @@ class MedicalExtractionAgent(Agent):
         extraction = coerce_extraction(parse_json_object(response))
         fallback = self.llm_service.heuristic_extract(cleaned_note)
         extraction = self._merge_extraction(extraction, fallback)
-        extraction["medical_references"] = self.medical_api.lookup_terms(
+        references = self.medical_api.lookup_terms(
             extraction.get("symptoms", [])
             + extraction.get("diagnoses", [])
             + extraction.get("medications", [])
         )
+        extraction["medical_references"] = [
+            reference.model_dump() if hasattr(reference, "model_dump") else reference
+            for reference in references
+        ]
         state["extracted_info"] = extraction
         return state
 
@@ -49,6 +53,7 @@ class MedicalExtractionAgent(Agent):
                 llm_extraction.get(key, []),
                 fallback.get(key, []),
             )
+        merged = self._remove_negated_extractions(merged)
         merged["vital_signs"] = self._merge_vitals(
             llm_extraction.get("vital_signs", []),
             fallback.get("vital_signs", []),
@@ -96,3 +101,22 @@ class MedicalExtractionAgent(Agent):
             "respiratory rate": "respiratory rate",
         }
         return aliases.get(normalized, normalized)
+
+    def _remove_negated_extractions(self, extraction: dict[str, Any]) -> dict[str, Any]:
+        negatives = [
+            str(item).lower()
+            for item in extraction.get("relevant_negatives", [])
+            if str(item).strip()
+        ]
+        if not negatives:
+            return extraction
+
+        for key in ["symptoms", "diagnoses", "medications"]:
+            filtered = []
+            for item in extraction.get(key, []):
+                lowered = str(item).lower()
+                if any(lowered and lowered in negative for negative in negatives):
+                    continue
+                filtered.append(item)
+            extraction[key] = filtered
+        return extraction

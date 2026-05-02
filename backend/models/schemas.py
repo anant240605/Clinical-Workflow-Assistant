@@ -34,9 +34,13 @@ class ExtractedInfo(BaseModel):
 
 
 class RecommendationSet(BaseModel):
+    clinical_impression: list[str] = Field(default_factory=list)
     possible_conditions: list[str] = Field(default_factory=list)
     recommended_tests: list[str] = Field(default_factory=list)
     medications: list[str] = Field(default_factory=list)
+    medication_cautions: list[str] = Field(default_factory=list)
+    red_flags: list[str] = Field(default_factory=list)
+    missing_information: list[str] = Field(default_factory=list)
     follow_ups: list[str] = Field(default_factory=list)
     safety_notes: list[str] = Field(default_factory=list)
 
