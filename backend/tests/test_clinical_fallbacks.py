@@ -1,6 +1,7 @@
 import unittest
 
 from agents.extraction_agent import MedicalExtractionAgent
+from agents.pipeline import ClinicalWorkflowPipeline
 from agents.reasoning_agent import ReasoningAgent
 from services.clinical_safety import ClinicalSafetyValidator
 from services.llm_service import LLMService
@@ -94,6 +95,54 @@ class ClinicalFallbackTests(unittest.TestCase):
         self.assertIn("tenecteplase", medications)
         self.assertIn("do not give outpatient", medications)
         self.assertNotIn("meclizine", medications)
+
+    def test_heart_failure_note_gets_congestion_guidance_not_skin_guidance(self):
+        note = (
+            "62-year-old male with swelling in both legs and breathlessness for the past 2 weeks. "
+            "Symptoms worsen on lying flat and improve on sitting up. "
+            "Fatigue and reduced exercise tolerance. History of hypertension and coronary artery disease. "
+            "BP 140/90, HR 95 bpm, SpO2 94%. Bilateral pitting edema and basal lung crackles."
+        )
+        extraction = self.llm.heuristic_extract(note)
+        recommendations = ClinicalSafetyValidator().validate(
+            note,
+            extraction,
+            self.llm.heuristic_recommendations(extraction),
+        )
+
+        symptoms = " ".join(extraction["symptoms"]).lower()
+        conditions = " ".join(recommendations["possible_conditions"]).lower()
+        tests = " ".join(recommendations["recommended_tests"]).lower()
+        medications = " ".join(recommendations["medications"]).lower()
+        self.assertIn("orthopnea", symptoms)
+        self.assertIn("pitting edema", symptoms)
+        self.assertIn("basal lung crackles", symptoms)
+        self.assertIn("decompensated heart failure", conditions)
+        self.assertIn("bnp", tests)
+        self.assertIn("echocardiography", tests)
+        self.assertIn("furosemide", medications)
+        self.assertNotIn("allergic reaction", conditions)
+        self.assertNotIn("cetirizine", medications)
+
+    def test_heart_failure_pipeline_report_has_extracted_details(self):
+        async def run_pipeline():
+            note = (
+                "Patient has swelling in both legs and breathlessness for 2 weeks. "
+                "Symptoms worsen on lying flat and improve on sitting up. "
+                "Past history of hypertension and coronary artery disease. "
+                "Vital signs: BP 140/90 mmHg, HR 95 bpm, SpO2 94%. "
+                "Bilateral pitting edema and basal lung crackles noted."
+            )
+            return await ClinicalWorkflowPipeline().run(note)
+
+        import asyncio
+
+        report = asyncio.run(run_pipeline())
+
+        self.assertIn("orthopnea", [item.lower() for item in report.extracted_info.symptoms])
+        self.assertTrue(report.extracted_info.vital_signs)
+        self.assertIn("heart failure", " ".join(report.recommendations.possible_conditions).lower())
+        self.assertNotIn("the documented symptoms", report.report.lower())
 
     def test_reasoning_merge_drops_insufficient_when_fallback_is_specific(self):
         agent = ReasoningAgent(self.llm, prompt_loader=None)

@@ -19,6 +19,8 @@ class ProcessingAgent(Agent):
             (r"\bc/o\b", "complains of"),
             (r"\bSOB\b", "shortness of breath"),
             (r"\bDOE\b", "dyspnea on exertion"),
+            (r"\bCAD\b", "coronary artery disease"),
+            (r"\bCHF\b", "heart failure"),
             (r"\bN/V\b", "nausea and vomiting"),
             (r"\bO2\s*sat\b", "oxygen saturation"),
             (r"\bTemp\b", "Temperature"),

@@ -132,6 +132,7 @@ class LLMService:
             "blurred vision",
             "body ache",
             "body aches",
+            "breathlessness",
             "burning urination",
             "chest pain",
             "chills",
@@ -149,6 +150,7 @@ class LLMService:
             "dysuria",
             "ear pain",
             "difficulty bearing weight",
+            "exercise intolerance",
             "facial droop",
             "fatigue",
             "fever",
@@ -160,8 +162,11 @@ class LLMService:
             "loss of taste",
             "nausea",
             "numbness",
+            "orthopnea",
             "pain",
+            "pitting edema",
             "palpitations",
+            "reduced exercise tolerance",
             "right-sided motor weakness",
             "right-sided weakness",
             "rash",
@@ -171,6 +176,7 @@ class LLMService:
             "shortness of breath",
             "slurred speech",
             "sore throat",
+            "basal lung crackles",
             "sweating",
             "swelling",
             "syncope",
@@ -199,6 +205,16 @@ class LLMService:
                     cleaned = self._clean_candidate(candidate)
                     if self._looks_like_symptom(cleaned) and cleaned.lower() not in symptoms:
                         symptoms.append(cleaned)
+
+        if re.search(r"\b(worse|worsens|worsening).{0,40}\blying flat\b", note) and re.search(
+            r"\b(improve|improves|relief|better).{0,40}\b(sitting|upright)\b",
+            note,
+        ):
+            symptoms.append("orthopnea")
+        if "pitting edema" in note:
+            symptoms.append("pitting edema")
+        if "basal lung crackles" in note or "crackles" in note:
+            symptoms.append("basal lung crackles")
 
         return self._dedupe_symptoms(symptoms)[:12]
 
@@ -608,7 +624,7 @@ class LLMService:
 
     def _split_clinical_list(self, value: str) -> list[str]:
         value = re.sub(
-            r"\b(?:for|since)\s+(?:\d+\s+(?:day|days|week|weeks|month|months|year|years)|yesterday|today|last night|this morning)\b",
+            r"\b(?:for|since)\s+(?:the\s+)?(?:past\s+)?(?:\d+\s+(?:day|days|week|weeks|month|months|year|years)|yesterday|today|last night|this morning)\b",
             "",
             value,
             flags=re.I,

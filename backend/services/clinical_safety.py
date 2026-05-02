@@ -42,6 +42,9 @@ class ClinicalSafetyValidator:
         if self._has_chest_pain_red_flags(text):
             self._apply_chest_pain_pathway(checked)
 
+        if self._has_heart_failure_features(text):
+            self._apply_heart_failure_pathway(checked)
+
         if self._has_anaphylaxis_red_flags(text):
             self._apply_anaphylaxis_pathway(checked)
 
@@ -99,6 +102,47 @@ class ClinicalSafetyValidator:
         breathing_or_shock = any(term in text for term in ["wheezing", "shortness of breath", "hypotension", "syncope"])
         allergy_context = any(term in text for term in ["hives", "urticaria", "allergic", "allergy", "anaphylaxis"])
         return (swelling and breathing_or_shock) or (allergy_context and breathing_or_shock)
+
+    def _has_heart_failure_features(self, text: str) -> bool:
+        congestion = any(
+            term in text
+            for term in [
+                "pitting edema",
+                "bilateral leg swelling",
+                "swelling in both legs",
+                "swelling of both legs",
+                "leg swelling",
+                "basal lung crackles",
+                "lung crackles",
+                "crackles",
+                "orthopnea",
+                "worse on lying flat",
+                "worsen on lying flat",
+                "worsens on lying flat",
+            ]
+        )
+        dyspnea = any(
+            term in text
+            for term in [
+                "breathlessness",
+                "shortness of breath",
+                "dyspnea",
+                "reduced exercise tolerance",
+                "exercise intolerance",
+                "fatigue",
+            ]
+        )
+        cardiac_risk = any(
+            term in text
+            for term in [
+                "hypertension",
+                "coronary artery disease",
+                "heart failure",
+                "cad",
+                "spo2 94",
+            ]
+        )
+        return congestion and dyspnea and cardiac_risk
 
     def _has_sepsis_red_flags(self, text: str) -> bool:
         infection_signal = any(term in text for term in ["fever", "sepsis", "infection", "rigors"])
@@ -174,6 +218,58 @@ class ClinicalSafetyValidator:
             "Active, severe, exertional, radiating, pressure-like chest pain, syncope, dyspnea, diaphoresis, hypotension, or abnormal ECG requires emergency evaluation."
         )
 
+    def _apply_heart_failure_pathway(self, recommendations: dict[str, list[str]]) -> None:
+        self._remove_skin_allergy_items(recommendations)
+        recommendations["medications"] = [
+            item
+            for item in recommendations.get("medications", [])
+            if "amlodipine, lisinopril/losartan, hydrochlorothiazide" not in item.lower()
+        ]
+        recommendations["clinical_impression"].append(
+            "Congestive heart-failure pattern documented: bilateral edema, orthopnea/breathlessness, reduced exercise tolerance, basal crackles, and cardiac risk history."
+        )
+        recommendations["possible_conditions"].extend(
+            [
+                "acute or subacute decompensated heart failure with volume overload",
+                "ischemic cardiomyopathy or hypertensive heart disease contributing to heart failure",
+                "pulmonary edema or pleural effusion depending on imaging and exam",
+                "renal, hepatic, venous, medication-related, or hypoalbuminemia causes of bilateral edema as alternatives",
+            ]
+        )
+        recommendations["recommended_tests"].extend(
+            [
+                "urgent clinician assessment of volume status, respiratory effort, oxygen saturation trend, weight change, JVP, edema grade, and lung exam",
+                "ECG and chest X-ray",
+                "BNP or NT-proBNP when available to support heart-failure assessment",
+                "echocardiography to assess ejection fraction, valves, wall motion, and structural disease",
+                "renal function, electrolytes, liver function, CBC, thyroid testing when indicated, and troponin if ischemia is possible",
+                "review current medications, salt/fluid intake, adherence, recent ischemic symptoms, arrhythmia, infection, and kidney function",
+            ]
+        )
+        recommendations["medications"].extend(
+            [
+                "loop diuretic such as furosemide/torsemide/bumetanide may be needed for clinically confirmed volume overload, with clinician-directed dosing and renal/electrolyte monitoring",
+                "oxygen or ventilatory support is considered if hypoxia or respiratory distress is present",
+                "long-term guideline-directed heart-failure medicines such as ACE inhibitor/ARB/ARNI, beta blocker, mineralocorticoid receptor antagonist, and SGLT2 inhibitor require EF, renal function, potassium, BP, and contraindication review",
+                "avoid NSAIDs when heart failure or fluid overload is suspected unless a clinician specifically approves",
+            ]
+        )
+        recommendations["medication_cautions"].extend(
+            [
+                "Check creatinine/eGFR, potassium, sodium, BP, volume status, and current diuretic/RAAS-inhibitor use before starting or changing heart-failure medications.",
+                "Diuretics can cause kidney injury, hypotension, and electrolyte abnormalities; monitoring is required.",
+            ]
+        )
+        recommendations["red_flags"].append(
+            "Severe breathlessness at rest, SpO2 below expected range or falling, pink frothy sputum, chest pain, syncope, confusion, hypotension, cyanosis, or rapidly worsening edema requires emergency evaluation."
+        )
+        recommendations["missing_information"].append(
+            "Weight change, JVP, edema grade, respiratory rate, oxygen requirement, chest pain, medication list/adherence, renal function, electrolytes, BNP/NT-proBNP, ECG, chest X-ray, echocardiogram, and urine output."
+        )
+        recommendations["follow_ups"].append(
+            "do not treat as a skin/allergy problem; arrange prompt clinician/cardiology assessment and urgent care if respiratory symptoms are significant or worsening"
+        )
+
     def _apply_anaphylaxis_pathway(self, recommendations: dict[str, list[str]]) -> None:
         self._remove_low_acuity_medications(recommendations)
         recommendations["clinical_impression"].append(
@@ -214,6 +310,30 @@ class ClinicalSafetyValidator:
             for item in recommendations.get("medications", [])
             if not any(term in item.lower() for term in self.low_acuity_medication_terms)
         ]
+
+    def _remove_skin_allergy_items(self, recommendations: dict[str, list[str]]) -> None:
+        blocked_terms = [
+            "allergic reaction",
+            "viral exanthem",
+            "dermatitis",
+            "cellulitis",
+            "urticaria",
+            "itching",
+            "hives",
+            "skin exam",
+            "topical hydrocortisone",
+            "diphenhydramine",
+            "cetirizine",
+            "loratadine",
+            "mupirocin",
+            "cephalexin",
+        ]
+        for key in ["clinical_impression", "possible_conditions", "recommended_tests", "medications", "red_flags", "missing_information", "follow_ups"]:
+            recommendations[key] = [
+                item
+                for item in recommendations.get(key, [])
+                if not any(term in item.lower() for term in blocked_terms)
+            ]
 
     def _ensure_core_safety(self, recommendations: dict[str, list[str]]) -> None:
         recommendations["safety_notes"].extend(
